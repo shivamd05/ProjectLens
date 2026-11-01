@@ -1,0 +1,41 @@
+# ProjectLens - System Requirements
+# This project uses Java (Spring Boot) + Node.js (React), not Python
+
+## Prerequisites (Manual Installation Required)
+# Install these before running the project:
+
+1. Node.js 18.x or newer - https://nodejs.org/
+2. Java JDK 21 - https://adoptium.net/
+3. Apache Maven 3.8+ - https://maven.apache.org/
+4. MySQL 8.0+ - https://dev.mysql.com/downloads/
+
+## Quick Installation Commands
+
+### Frontend Dependencies (Run from /frontend directory)
+npm ci
+
+### Backend Dependencies (Run from /backend directory)
+mvn clean install
+
+### Database Setup (Run in MySQL)
+CREATE DATABASE projectlense CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+## Configuration Files Needed
+
+### Backend: Create backend/.env
+DATABASE_URL=jdbc:mysql://localhost:3306/projectlense?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+DATABASE_USERNAME=root
+DATABASE_PASSWORD=your_password
+PROJECTLENSE_ADMIN_TOKEN=your_secure_admin_token
+SERVER_PORT=8000
+
+### Frontend: Create frontend/.env.local (Optional)
+VITE_API_BASE_URL=http://127.0.0.1:8000
+
+## Run Application
+
+### Start Backend (port 8000)
+cd backend && mvn spring-boot:run
+
+### Start Frontend (port 5173)
+cd frontend && npm run dev
