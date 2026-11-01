@@ -1,0 +1,27 @@
+# Node / Vite
+node_modules/
+**/node_modules/
+frontend/dist/
+dist/
+
+# Java / Maven
+backend/target/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Runtime uploads and generated files
+backend/uploads/
+backend/extracted_projects/
+*.log
+*.tmp
+*.swp
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
