@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { 
@@ -7,8 +7,7 @@ import {
 } from 'lucide-react'
 import DashboardLayout from '../../components/layout/DashboardLayout'
 import { useToast } from '../../contexts/ToastContext'
-import { uploadProjectReport } from '../../services/api'
-import { checkProjectSimilarity } from '../../services/api'
+import { checkProjectSimilarity, createProject, fetchFacultyGuides, uploadProjectSubmission } from '../../services/api'
 
 const sidebarItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/student/dashboard' },
@@ -29,6 +28,9 @@ export default function SubmitProject() {
   const [similarityBusy, setSimilarityBusy] = useState(false)
   const [similarityResults, setSimilarityResults] = useState(null)
   const [similarityError, setSimilarityError] = useState('')
+  const [facultyGuides, setFacultyGuides] = useState([])
+  const [guidesError, setGuidesError] = useState('')
+  const [draftProject, setDraftProject] = useState(null)
   
   const [form, setForm] = useState({
     title: '',
@@ -39,6 +41,10 @@ export default function SubmitProject() {
   })
   
   const [errors, setErrors] = useState({})
+
+  useEffect(() => {
+    fetchFacultyGuides().then(setFacultyGuides).catch(error => setGuidesError(error.message))
+  }, [])
 
   const handleChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -55,6 +61,11 @@ export default function SubmitProject() {
   const handleFileChange = (e) => {
     const file = e.target.files[0]
     if (!file) return
+    if (file.size > 100 * 1024 * 1024) {
+      addToast('Files must be 100 MB or smaller.', 'error')
+      e.target.value = ''
+      return
+    }
 
     const name = file.name.toLowerCase()
     if (uploadMode === 'pdf' && !name.endsWith('.pdf')) {
@@ -74,7 +85,8 @@ export default function SubmitProject() {
     const errs = {}
     if (!form.title.trim()) errs.title = 'Project title is required'
     if (!form.description.trim()) errs.description = 'Description is required'
-    if (!form.facultyGuide.trim()) errs.facultyGuide = 'Faculty guide name is required'
+    if (!form.academicYear) errs.academicYear = 'Academic year is required'
+    if (!form.facultyGuide) errs.facultyGuide = 'Select an assigned faculty guide'
     if (!selectedFile) errs.file = `Please upload your project ${uploadMode.toUpperCase()} file`
     setErrors(errs)
     return Object.keys(errs).length === 0
@@ -88,31 +100,29 @@ export default function SubmitProject() {
     }
 
     setLoading(true)
-    setPipelineStep(uploadMode === 'zip' ? 'Unpacking ZIP & analyzing codebase metrics...' : 'Ingesting PDF & extracting text with PyMuPDF...')
-
-    const formData = new FormData()
-    formData.append('title', form.title)
-    formData.append('description', form.description)
-    formData.append('department', form.department)
-    formData.append('academic_year', form.academicYear)
-    formData.append('faculty_guide', form.facultyGuide)
-    formData.append('report', selectedFile)
-
     try {
-      setPipelineStep('Detecting major sections & evaluating against rubrics...')
-      const response = await uploadProjectReport(formData)
-      
-      if (response && response.project) {
-        setLoading(false)
-        addToast(`${uploadMode.toUpperCase()} evaluated successfully!`, 'success')
-        navigate(`/student/projects/${response.project.id}`)
-        return
+      let project = draftProject
+      if (!project) {
+        setPipelineStep('Saving project details...')
+        const created = await createProject({
+          title: form.title.trim(), description: form.description.trim(), department: form.department,
+          academicYear: form.academicYear, facultyGuide: form.facultyGuide,
+        })
+        project = created.project
+        setDraftProject(project)
       }
+      setPipelineStep(`Uploading ${uploadMode.toUpperCase()} submission...`)
+      await uploadProjectSubmission(project.id, selectedFile)
+      setDraftProject(null)
+      setLoading(false)
+      addToast('Submission received. Faculty progress reviews must be completed before AI evaluation.', 'success')
+      navigate(`/student/projects/${project.id}`)
+      return
     } catch (err) {
-      console.error('[Submit] Project was not saved to the backend:', err)
+      console.error('[Submit] Project submission failed:', err)
       setLoading(false)
       setPipelineStep('')
-      addToast(`Project was not saved: ${err.message}`, 'error')
+      addToast(`Submission failed: ${err.message}`, 'error')
       return
     }
 
@@ -127,7 +137,7 @@ export default function SubmitProject() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-navy-900">Submit Project for AI Evaluation</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Choose whether to upload a single <strong>PDF Report</strong> or a full <strong>ZIP Project Archive</strong> (codebase + docs).
+            Choose a <strong>PDF Report</strong> or <strong>ZIP Project Archive</strong>. AI evaluation begins after all three faculty progress reviews.
           </p>
         </div>
 
@@ -226,6 +236,7 @@ export default function SubmitProject() {
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Academic Year</label>
                   <select
+                    required
                     value={form.academicYear}
                     onChange={e => handleChange('academicYear', e.target.value)}
                     className="w-full text-sm px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 outline-none focus:border-blue-500"
@@ -234,16 +245,21 @@ export default function SubmitProject() {
                     {['2025-26', '2026-27', '2027-28'].map(year => <option key={year}>{year}</option>)}
                     <option>2023-24</option>
                   </select>
+                  {errors.academicYear && <p className="text-red-500 text-xs mt-1">{errors.academicYear}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Faculty Guide *</label>
-                  <input
-                    type="text"
+                  <select
                     value={form.facultyGuide}
                     onChange={e => handleChange('facultyGuide', e.target.value)}
-                    className="w-full text-sm px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 outline-none focus:border-blue-500"
-                    placeholder="Prof. Name"
-                  />
+                    className={`w-full text-sm px-3 py-2.5 rounded-xl border ${errors.facultyGuide ? 'border-red-400' : 'border-gray-200'} bg-gray-50/50 outline-none focus:border-blue-500`}
+                  >
+                    <option value="">Select a faculty guide</option>
+                    {facultyGuides.map(guide => <option key={guide.id} value={guide.id}>{guide.name}{guide.department ? ` · ${guide.department}` : ''}</option>)}
+                  </select>
+                  {errors.facultyGuide && <p className="text-red-500 text-xs mt-1">{errors.facultyGuide}</p>}
+                  {guidesError && <p role="alert" className="text-red-600 text-xs mt-1">Could not load faculty guides: {guidesError}</p>}
+                  {!guidesError && facultyGuides.length === 0 && <p className="text-amber-700 text-xs mt-1">No faculty accounts are available yet. Ask an administrator to provision a faculty guide.</p>}
                 </div>
               </div>
             </div>
@@ -266,8 +282,8 @@ export default function SubmitProject() {
             </h2>
             <p className="text-xs text-gray-500 mb-4">
               {uploadMode === 'pdf'
-                ? 'PyMuPDF will parse all pages, detect academic sections, and compute word statistics.'
-                : 'ProjectLense will unpack the ZIP, inspect lines of code (LOC), detect tech stacks, and evaluate embedded report PDFs.'}
+                ? 'Your report will be stored securely and evaluated after the three faculty progress reviews.'
+                : 'Your archive will be stored securely and inspected after the three faculty progress reviews.'}
             </p>
 
             {selectedFile ? (

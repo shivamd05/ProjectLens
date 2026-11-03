@@ -10,12 +10,13 @@ import Register from './pages/Register'
 import StudentDashboard from './pages/student/Dashboard'
 import SubmitProject from './pages/student/SubmitProject'
 import MyProjects from './pages/student/MyProjects'
-import ProjectDetails from './pages/student/ProjectDetails'
+import ProjectWorkflowDetails from './pages/student/ProjectWorkflowDetails'
 
 import FacultyDashboard from './pages/faculty/Dashboard'
-import FacultyProjectReview from './pages/faculty/ProjectReview'
+import ProjectWorkflow from './pages/faculty/ProjectWorkflow'
 
 import AdminDashboard from './pages/admin/Dashboard'
+import AdminRubrics from './pages/admin/Rubrics'
 
 function App() {
   return (
@@ -38,7 +39,7 @@ function App() {
               <ProtectedRoute role="student"><MyProjects /></ProtectedRoute>
             } />
             <Route path="/student/projects/:id" element={
-              <ProtectedRoute role="student"><ProjectDetails /></ProtectedRoute>
+              <ProtectedRoute role="student"><ProjectWorkflowDetails /></ProtectedRoute>
             } />
 
             {/* Faculty Routes */}
@@ -46,12 +47,18 @@ function App() {
               <ProtectedRoute role="faculty"><FacultyDashboard /></ProtectedRoute>
             } />
             <Route path="/faculty/projects/:id" element={
-              <ProtectedRoute role="faculty"><FacultyProjectReview /></ProtectedRoute>
+              <ProtectedRoute role="faculty"><ProjectWorkflow /></ProtectedRoute>
             } />
 
             {/* Admin Routes */}
             <Route path="/admin/dashboard" element={
               <ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>
+            } />
+            <Route path="/admin/rubrics" element={
+              <ProtectedRoute role="admin"><AdminRubrics /></ProtectedRoute>
+            } />
+            <Route path="/admin/projects/:id" element={
+              <ProtectedRoute role="admin"><ProjectWorkflow /></ProtectedRoute>
             } />
 
             <Route path="*" element={<Navigate to="/" replace />} />

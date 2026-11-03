@@ -13,6 +13,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,6 +28,12 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(e.status).body(Map.of("detail", e.getMessage()));
     }
 
+    @ExceptionHandler(ResponseStatusException.class)
+    ResponseEntity<?> responseStatus(ResponseStatusException e) {
+        String detail = e.getReason() == null ? e.getStatusCode().toString() : e.getReason();
+        return ResponseEntity.status(e.getStatusCode()).body(Map.of("detail", detail));
+    }
+
     @ExceptionHandler({MissingServletRequestParameterException.class, MissingServletRequestPartException.class,
             MethodArgumentNotValidException.class, ConstraintViolationException.class, MethodArgumentTypeMismatchException.class,
             HttpMessageNotReadableException.class})
@@ -35,7 +42,7 @@ public class ApiExceptionHandler {
         if (e instanceof MethodArgumentNotValidException invalid) {
             for (FieldError field : invalid.getBindingResult().getFieldErrors()) {
                 details.add(Map.of("type", "missing", "loc", List.of("body", field.getField()),
-                        "msg", "Field required", "input", ""));
+                        "msg", field.getDefaultMessage() == null ? "Invalid value" : field.getDefaultMessage(), "input", ""));
             }
         } else if (e instanceof MissingServletRequestPartException missing) {
             details.add(Map.of("type", "missing", "loc", List.of("body", missing.getRequestPartName()), "msg", "Field required"));

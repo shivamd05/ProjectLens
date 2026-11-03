@@ -67,7 +67,11 @@ public class ProjectJsonRepository {
 
     private Map<String, Object> asApiRecord(ProjectEntity entity) {
         if (entity.getApiPayloadJson() != null && !entity.getApiPayloadJson().isBlank()) {
-            try { return mapper.readValue(entity.getApiPayloadJson(), new TypeReference<>() {}); }
+            try {
+                Map<String, Object> stored = mapper.readValue(entity.getApiPayloadJson(), new TypeReference<>() {});
+                stored.put("status", entity.getStatus());
+                return stored;
+            }
             catch (Exception ignored) { /* Fall back to the project columns below. */ }
         }
         Map<String, Object> out = new LinkedHashMap<>();

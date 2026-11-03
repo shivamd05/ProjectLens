@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import { LayoutDashboard, Users, FolderOpen, ClipboardCheck, Settings, BarChart3, TrendingUp, FileText, CheckCircle, Clock, UserCheck, GraduationCap, Award } from 'lucide-react'
 import DashboardLayout from '../../components/layout/DashboardLayout'
 import { useAuth } from '../../contexts/AuthContext'
@@ -8,6 +9,7 @@ import { createExcelImport, fetchExcelImportPreview, approveExcelImport, cancelE
 
 const sidebarItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/admin/dashboard' },
+  { icon: Award, label: 'Evaluation Rubrics', path: '/admin/rubrics' },
   { icon: Users, label: 'Users', path: '/admin/dashboard' },
   { icon: FolderOpen, label: 'Projects', path: '/admin/dashboard' },
   { icon: ClipboardCheck, label: 'Evaluations', path: '/admin/dashboard' },
@@ -269,6 +271,7 @@ export default function AdminDashboard() {
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell">Student</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">AI Score</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Workflow</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -282,6 +285,7 @@ export default function AdminDashboard() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm font-semibold text-navy-900 hidden md:table-cell">{p.aiEvaluation?.overallScore || '-'}/100</td>
+                  <td className="px-6 py-4"><Link to={`/admin/projects/${p.id}`} className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">Open reviews</Link></td>
                 </tr>
               ))}
             </tbody>

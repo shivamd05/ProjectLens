@@ -45,12 +45,18 @@ public class EvaluationService {
             """;
     private final RestClient http = RestClient.builder().requestFactory(requestFactory()).build();
     private final String geminiKey;
+    private final String geminiModel;
     private final String openAiKey;
+    private final String openAiModel;
 
     public EvaluationService(@Value("${GEMINI_API_KEY:}") String geminiKey,
-                             @Value("${OPENAI_API_KEY:}") String openAiKey) {
+                             @Value("${projectlense.evaluation.gemini-model:gemini-3.8-flash}") String geminiModel,
+                             @Value("${OPENAI_API_KEY:}") String openAiKey,
+                             @Value("${OPENAI_MODEL:gpt-6-luna}") String openAiModel) {
         this.geminiKey = geminiKey;
+        this.geminiModel = geminiModel;
         this.openAiKey = openAiKey;
+        this.openAiModel = openAiModel;
     }
 
     private static JdkClientHttpRequestFactory requestFactory() {
@@ -72,23 +78,71 @@ public class EvaluationService {
         return fallback(text, title, sections, stats);
     }
 
+    /** Uses the configured provider for a caller-supplied rubric prompt without demo-score fallback. */
+    public String evaluateRubricPrompt(String evaluationPrompt) throws Exception {
+        List<Exception> failures = new ArrayList<>();
+        if (!geminiKey.isBlank()) {
+            try { return callGeminiText(evaluationPrompt); }
+            catch (Exception e) { failures.add(e); System.err.println("[Rubric Evaluator] Gemini request failed; trying configured fallback provider"); }
+        }
+        if (!openAiKey.isBlank()) {
+            try { return callOpenAiText(evaluationPrompt); }
+            catch (Exception e) { failures.add(e); System.err.println("[Rubric Evaluator] OpenAI request failed"); }
+        }
+        IllegalStateException unavailable = new IllegalStateException("No configured LLM provider returned a valid response");
+        failures.forEach(unavailable::addSuppressed);
+        throw unavailable;
+    }
+
+    @SuppressWarnings("unchecked")
+    private String callGeminiText(String prompt) {
+        Map<String, Object> payload = Map.of("contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
+                "generationConfig", Map.of("temperature", 0.2, "responseMimeType", "application/json"));
+        Map<String, Object> data = http.post()
+                .uri("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}", geminiModel, geminiKey)
+                .body(payload).retrieve().body(Map.class);
+        if (data == null) throw new IllegalStateException("Gemini returned an empty response");
+        List<Map<String, Object>> candidates = (List<Map<String, Object>>) data.get("candidates");
+        if (candidates == null || candidates.isEmpty()) throw new IllegalStateException("Gemini returned no evaluation candidate");
+        Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
+        List<Map<String, Object>> parts = content == null ? null : (List<Map<String, Object>>) content.get("parts");
+        if (parts == null || parts.isEmpty() || parts.get(0).get("text") == null) throw new IllegalStateException("Gemini returned no evaluation text");
+        return String.valueOf(parts.get(0).get("text"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private String callOpenAiText(String prompt) {
+        Map<String, Object> payload = Map.of("model", openAiModel, "reasoning_effort", "none", "temperature", 0.2,
+                "response_format", Map.of("type", "json_object"),
+                "messages", List.of(Map.of("role", "system", "content", "Return only the JSON object requested by the evaluation instructions."),
+                        Map.of("role", "user", "content", prompt)));
+        Map<String, Object> data = http.post().uri("https://api.openai.com/v1/chat/completions")
+                .header("Authorization", "Bearer " + openAiKey).body(payload).retrieve().body(Map.class);
+        if (data == null) throw new IllegalStateException("OpenAI returned an empty response");
+        List<Map<String, Object>> choices = (List<Map<String, Object>>) data.get("choices");
+        if (choices == null || choices.isEmpty()) throw new IllegalStateException("OpenAI returned no evaluation choice");
+        Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+        if (message == null || message.get("content") == null) throw new IllegalStateException("OpenAI returned no evaluation text");
+        return String.valueOf(message.get("content"));
+    }
+
     @SuppressWarnings("unchecked")
     private Map<String, Object> callGemini(String text, String title) throws Exception {
         Map<String, Object> payload = Map.of("contents", List.of(Map.of("parts", List.of(Map.of("text", prompt(text, title))))),
-                "generationConfig", Map.of("temperature", 0.2, "response_mime_type", "application/json"));
-        Map<String, Object> data = http.post().uri("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}", geminiKey)
+                "generationConfig", Map.of("temperature", 0.2, "responseMimeType", "application/json"));
+        Map<String, Object> data = http.post().uri("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}", geminiModel, geminiKey)
                 .body(payload).retrieve().body(Map.class);
         List<Map<String, Object>> candidates = (List<Map<String, Object>>) data.get("candidates");
         Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
         List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
         Map<String, Object> parsed = new com.fasterxml.jackson.databind.ObjectMapper().readValue((String) parts.get(0).get("text"), Map.class);
-        parsed.put("is_demo_mode", false); parsed.put("model_provider", "Google Gemini 1.5 Flash");
+        parsed.put("is_demo_mode", false); parsed.put("model_provider", "Google Gemini " + geminiModel);
         return parsed;
     }
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> callOpenAi(String text, String title) throws Exception {
-        Map<String, Object> payload = Map.of("model", "gpt-4o-mini", "temperature", 0.2,
+        Map<String, Object> payload = Map.of("model", openAiModel, "reasoning_effort", "none", "temperature", 0.2,
                 "response_format", Map.of("type", "json_object"),
                 "messages", List.of(Map.of("role", "system", "content", SYSTEM_PROMPT),
                         Map.of("role", "user", "content", prompt(text, title))));

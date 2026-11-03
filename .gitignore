@@ -25,3 +25,7 @@ backend/extracted_projects/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Google Cloud credentials
+*service-account*.json
+*serviceAccount*.json
